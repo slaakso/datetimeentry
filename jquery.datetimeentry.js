@@ -281,6 +281,42 @@ $.extend(DatetimeEntry.prototype, {
 			(time.getHours() * 3600 + time.getMinutes() * 60 + time.getSeconds()) * 1000);
 	},
 
+	_getField: function(input) {
+		var inst = $.data(input, plugin.propertyName), datetimeFormat = inst.options.datetimeFormat, field_return = 0,
+			end = 0, field, src, offsetX;
+		
+		if (input.selectionStart != null) { // Use input select range
+			for (field = 0; field < datetimeFormat.length; field++) {
+				end += plugin._fieldLength(inst, datetimeFormat.charAt(field));
+				if (input.selectionStart <= end) {
+					break;
+				}
+				field_return += (datetimeFormat.charAt(field).match(/[yondwhmsa]/i) ? 1 : 0);
+			}
+		}
+		else if (input.createTextRange) { // Check against bounding boxes
+			src = $(event.srcElement);
+			range = input.createTextRange();
+			var convert = function(value) {
+				return {thin: 2, medium: 4, thick: 6}[value] || value;
+			};
+			offsetX = event.clientX + document.documentElement.scrollLeft -
+				(src.offset().left + parseInt(convert(src.css('border-left-width')), 10)) -
+				range.offsetLeft; // Position - left edge - alignment
+
+			for (field = 0; field < datetimeFormat.length; field++) {
+				end += plugin._fieldLength(inst, datetimeFormat.charAt(field));
+				range.collapse();
+				range.moveEnd('character', end);
+				if (offsetX < range.boundingWidth) { // And compare
+					break;
+				}
+				field_return += (datetimeFormat.charAt(field).match(/[yondwhmsa]/i) ? 1 : 0);
+			}
+		}
+		return field_return;
+	},
+	
 	/* Initialise datetime entry.
 	   @param  target  (element) the input field or
 	                   (event) the focus event */
@@ -291,13 +327,14 @@ $.extend(DatetimeEntry.prototype, {
 			return;
 		}
 		var inst = $.data(input, plugin.propertyName);
+		
 		plugin._focussed = true;
 		plugin._lastInput = input;
 		plugin._blurredInput = null;
 		$.extend(inst.options, ($.isFunction(inst.options.beforeShow) ?
 			inst.options.beforeShow.apply(input, [input]) : {}));
 		plugin._extractDatetime(inst);
-		setTimeout(function() { plugin._showField(inst); }, 10);
+		setTimeout(function() { plugin._showField(inst,true); }, 10);
 	},
 
 	/* Note that the field has been exited.
@@ -615,7 +652,7 @@ $.extend(DatetimeEntry.prototype, {
 		inst._selectedMinute = fields[1];
 		inst._selectedSecond = fields[2];
 		inst._lastChr = '';
-		inst._field = Math.max(0, inst.options.initialField);
+		inst._field = inst._field===0 ? Math.max(0, inst.options.initialField) : inst._field;
 		if (inst.input.val() != '') {
 			this._showDatetime(inst);
 		}
@@ -783,11 +820,16 @@ $.extend(DatetimeEntry.prototype, {
 
 	/* Highlight the current datetime field.
 	   @param  inst  (object) the instance settings */
-	_showField: function(inst) {
+	_showField: function(inst, initial) {
 		var input = inst.input[0];
 		if (inst.input.is(':hidden') || plugin._lastInput != input) {
 			return;
 		}
+		if (initial!==undefined) {
+			// Webkit based browsers do not set the input.selectionStart onFocus so we need get it later
+			inst._field = plugin._getField(input);
+		}
+		
 		var start = 0;
 		for (var i = 0; i < inst._fields[inst._field]; i++) {
 			start += this._fieldLength(inst, inst.options.datetimeFormat.charAt(i));
