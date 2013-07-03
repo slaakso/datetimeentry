@@ -327,7 +327,7 @@ $.extend(DatetimeEntry.prototype, {
 			return;
 		}
 		var inst = $.data(input, plugin.propertyName);
-		
+		inst._field = plugin._getField(input); // For IE
 		plugin._focussed = true;
 		plugin._lastInput = input;
 		plugin._blurredInput = null;
