@@ -46,7 +46,7 @@ function DatetimeEntry() {
 	};
 	this._defaults = {
 		appendText: '', // Display text following the input box, e.g. showing the format
-		initialField: 0, // The field to highlight initially, 0 = hours, 1 = minutes, ...
+		initialField: -1, // The field to highlight initially, 0 = hours, 1 = minutes, ...
 		useMouseWheel: true, // True to use mouse wheel for increment/decrement if possible,
 			// false to never use it
 		shortYearCutoff: '+10', // The century cutoff for two-digit years,
@@ -333,7 +333,7 @@ $.extend(DatetimeEntry.prototype, {
 		plugin._blurredInput = null;
 		$.extend(inst.options, ($.isFunction(inst.options.beforeShow) ?
 			inst.options.beforeShow.apply(input, [input]) : {}));
-		plugin._extractDatetime(inst);
+		plugin._extractDatetime(inst, false);
 		setTimeout(function() { plugin._showField(inst,true); }, 10);
 	},
 
@@ -395,6 +395,7 @@ $.extend(DatetimeEntry.prototype, {
 			return true;
 		}
 		var inst = $.data(event.target, plugin.propertyName);
+		
 		switch (event.keyCode) {
 			case 9: return (event.shiftKey ?
 						// Move to previous datetime field, or out if at the beginning
@@ -424,6 +425,7 @@ $.extend(DatetimeEntry.prototype, {
 			case 46: plugin._setValue(inst, ''); break; // Clear datetime on delete
 			default: return true;
 		}
+		
 		return false;
 	},
 
@@ -640,11 +642,13 @@ $.extend(DatetimeEntry.prototype, {
 
 	/* Extract the datetime value from the input field, or default to now.
 	   @param  inst  (object) the instance settings */
-	_extractDatetime: function(inst) {
+	_extractDatetime: function(inst, set_range) {
 		var currentDatetime = this._parseDatetime(inst, inst.input.val()) || this._normaliseDatetime(
 			this._determineDatetime(inst, inst.options.defaultDatetime) || new Date());
 		var fields = this._constrainTime(inst, [currentDatetime.getHours(),
 			currentDatetime.getMinutes(), currentDatetime.getSeconds()]);
+			
+		if (set_range===undefined) set_range = true;
 		inst._selectedYear = currentDatetime.getFullYear();
 		inst._selectedMonth = currentDatetime.getMonth();
 		inst._selectedDay = currentDatetime.getDate();
@@ -652,9 +656,9 @@ $.extend(DatetimeEntry.prototype, {
 		inst._selectedMinute = fields[1];
 		inst._selectedSecond = fields[2];
 		inst._lastChr = '';
-		inst._field = inst._field===0 ? Math.max(0, inst.options.initialField) : inst._field;
+		inst._field = inst.options.initialField>=0 ? Math.max(0, inst.options.initialField) : inst._field;
 		if (inst.input.val() != '') {
-			this._showDatetime(inst);
+			this._showDatetime(inst, false, set_range);
 		}
 	},
 
@@ -761,9 +765,9 @@ $.extend(DatetimeEntry.prototype, {
 
 	/* Set the selected date/time into the input field.
 	   @param  inst  (object) the instance settings */
-	_showDatetime: function(inst) {
+	_showDatetime: function(inst, initial, set_range) {
 		this._setValue(inst, this._formatDatetime(inst, inst.options.datetimeFormat));
-		this._showField(inst);
+		this._showField(inst, initial, set_range);
 	},
 
 	/* Format a date/time as requested.
@@ -820,12 +824,13 @@ $.extend(DatetimeEntry.prototype, {
 
 	/* Highlight the current datetime field.
 	   @param  inst  (object) the instance settings */
-	_showField: function(inst, initial) {
+	_showField: function(inst, initial, show_range) {
 		var input = inst.input[0];
 		if (inst.input.is(':hidden') || plugin._lastInput != input) {
 			return;
 		}
-		if (initial!==undefined) {
+		if (show_range===undefined) show_range=true; 
+		if (initial===true && inst.options.initialField<0) {
 			// Webkit based browsers do not set the input.selectionStart onFocus so we need get it later
 			inst._field = plugin._getField(input);
 		}
@@ -836,7 +841,9 @@ $.extend(DatetimeEntry.prototype, {
 		}
 		var end = start + this._fieldLength(inst, inst.options.datetimeFormat.charAt(i));
 		if (input.setSelectionRange) { // Mozilla
-			input.setSelectionRange(start, end);
+			if (show_range) {
+				input.setSelectionRange(start, end);
+			}
 		}
 		else if (input.createTextRange) { // IE
 			var range = input.createTextRange();
@@ -846,7 +853,7 @@ $.extend(DatetimeEntry.prototype, {
 		}
 		if (!input.disabled) {
 			input.focus();
-		}
+		}		
 	},
 
 	/* Calculate the field length.
@@ -989,7 +996,7 @@ $.extend(DatetimeEntry.prototype, {
 		inst._selectedHour = datetime.getHours();
 		inst._selectedMinute = datetime.getMinutes();
 		inst._selectedSecond = datetime.getSeconds();
-		this._showDatetime(inst);
+		this._showDatetime(inst, false, true);
 	},
 
 	/* Copy just the date portion of a date/time.
